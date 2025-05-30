@@ -2,9 +2,19 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+prisma.$connect()
+  .then(() => {
+    console.log('✅ Successfully connected to the database!');
+  })
+  .catch((error) => {
+    console.error('❌ Error connecting to the database:', error);
+  });
+
 export const identifyContact = async (email?: string, phoneNumber?: string) => {
-  if (!email && !phoneNumber) {
-    throw new Error('At least one of email or phoneNumber is required');
+  try{
+
+    if (!email && !phoneNumber) {
+      throw new Error('At least one of email or phoneNumber is required');
   }
 
   const contacts = await prisma.contact.findMany({
@@ -16,7 +26,7 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
     },
     orderBy: {createdAt: 'asc' },
   });
-
+  // console.log(contacts, 'contac');
   if (contacts.length === 0) {
     const newContact = await prisma.contact.create({
       data: {
@@ -54,13 +64,13 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
       );
     }
   }
-
+  
   await Promise.all(updates);
-
+  
   const existingContact = contacts.find(
     c => c.email === email && c.phoneNumber === phoneNumber
   );
-
+  
   if (!existingContact) {
     await prisma.contact.create({
       data: {
@@ -71,7 +81,7 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
       },
     });
   }
-
+  
   const allContacts = await prisma.contact.findMany({
     where: {
       OR: [
@@ -81,29 +91,37 @@ export const identifyContact = async (email?: string, phoneNumber?: string) => {
     },
     orderBy: { createdAt: 'asc' },
   });
-
+  
   return formatContactResponse(allContacts);
+  } catch(e){
+    console.log('Got an error', e);
+  }
 };
 
 function formatContactResponse(contacts: any[]) {
-  const primary = contacts.find(c => c.linkPrecedence === 'primary');
+  try{
 
-  const emails = new Set<string>();
-  const phoneNumbers = new Set<string>();
-  const secondaryContactIds: number[] = [];
-
-  for (const contact of contacts) {
-    if (contact.email) emails.add(contact.email);
-    if (contact.phoneNumber) phoneNumbers.add(contact.phoneNumber);
-    if (contact.linkPrecedence === 'secondary') {
-      secondaryContactIds.push(contact.id);
+    const primary = contacts.find(c => c.linkPrecedence === 'primary');
+    
+    const emails = new Set<string>();
+    const phoneNumbers = new Set<string>();
+    const secondaryContactIds: number[] = [];
+    
+    for (const contact of contacts) {
+      if (contact.email) emails.add(contact.email);
+      if (contact.phoneNumber) phoneNumbers.add(contact.phoneNumber);
+      if (contact.linkPrecedence === 'secondary') {
+        secondaryContactIds.push(contact.id);
+      }
     }
+    
+    return {
+      primaryContactId: primary.id,
+      emails: Array.from(emails),
+      phoneNumbers: Array.from(phoneNumbers),
+      secondaryContactIds,
+    };
+  }catch (e){
+    console.log('Error formatting');
   }
-
-  return {
-    primaryContactId: primary.id,
-    emails: Array.from(emails),
-    phoneNumbers: Array.from(phoneNumbers),
-    secondaryContactIds,
-  };
 }
